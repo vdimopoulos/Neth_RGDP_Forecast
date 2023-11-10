@@ -1,0 +1,382 @@
+---
+title: "Time Series and Forecasting Assignment"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+## 1.Time Series Model
+```{r}
+rm(list = ls())
+library(tseries)
+library(fGarch) 
+library(rugarch)
+library(Hmisc)
+library(readxl)
+excel_file <- "EULN1NETH.xlsx"
+df <- read_excel(excel_file)
+df <- df[-c(1:10), ]
+df <- df[, -1]
+df$x1 <- as.double(df$x1)
+df$x2 <- as.double(df$x2)
+df$x3 <- as.double(df$x3)
+df$x4 <- as.double(df$x4)
+df$x5 <- as.double(df$x5)
+df$x6 <- as.double(df$x6)
+df$x7 <- as.double(df$x7)
+df$x8 <- as.double(df$x8)
+df$x9 <- as.double(df$x9)
+df$x10 <- as.double(df$x10)
+df$x11<- as.double(df$x11)
+df$x12 <- as.double(df$x12)
+df$x13 <- as.double(df$x13)
+df$x14 <- as.double(df$x14)
+df$x15 <- as.double(df$x15)
+df$x16 <- as.double(df$x16)
+df$y <- as.double(df$y)
+rgdp_ts =ts(df$y, frequency=4, start = c(2001,2))
+plot(rgdp_ts, type="o", col="blue", lty="dashed")
+```
+We will plot a histogram of the distribution of the RGDP growth values.
+```{r}
+hist(rgdp_ts, nclass=20, main="Histogram of Netherlands RGDP growth")
+```
+Bellow we will plot the ACF and PACF plots to find the autocorrelation and partial autocorrelation per lag(1-48) for our data. We can see that for all lags, the autocorrelations and partial autocorrelations are below the critical value line, which means that they are not significant and there is no autocorrelation between the yt values (PACF) or the error values (ACF). On lag 45 we can see that the partial autocorrelation goes over the critical value line. We will consider that as noise, as 45 periods before can't be significant to the current values.
+```{r}
+par(mfrow=c(1,2))        # set up the graphics  
+acf(ts(rgdp_ts,freq=1), 48, main="ACF of NETH RGDP")        # autocorrelation function plot 
+pacf(ts(rgdp_ts,freq=1), 48, main="PACF of NETH RGDP")    # partial autocorrelation function 
+
+```
+
+```{r}
+m=ar(rgdp_ts)
+m
+m$order
+```
+
+Below we run the Augmented Dickey-Fuller Test to see if our data are stationary, getting a p-value smaller than 0.01. We reject the null hypothesis that the data are not stationary.
+```{r}
+adf.test(rgdp_ts,k=1)
+```
+Bellow we run both Box-Pierce and Ljung-box tests to see if what we saw on the plots before is supported. The results agree that there is no significant autocorrelation between our data for any lag. (both p-values close to 1, we don't reject the null hypothesis, that there is no autocorrelation between our data). Because of these results we cannot continue with the time series modeling of our data, as there is no connection (correlation) between the values and we cannot extract any information to apply to our model. The values are simply independent and we cannot model any relationship between them. We will continue with the regression analysis.
+```{r}
+res1=Box.test(rgdp_ts,48,type="Box-Pierce")
+res2=Box.test(rgdp_ts,48,type="Ljung-Box")
+res1
+res2
+# END OF TIME SERIES MODELING: NO AUTOCORRELATION IN RESIDUALS
+```
+## 2. Combination of Approaches
+
+We will plot our data again.
+```{r}
+y <- df$y
+x1 <- df$x1
+x2 <- df$x2
+x3 <- df$x3
+x4 <- df$x4
+x5 <- df$x5
+x6 <- df$x6
+x7 <- df$x7
+x8 <- df$x8
+x9 <- df$x9
+x10 <- df$x10
+x11 <- df$x11
+x12 <- df$x12
+x13 <- df$x13
+x14 <- df$x14
+x15 <- df$x15
+x16 <- df$x16
+
+
+# Summary Statistics and plots
+plot(y, type="l", main="NETH RGDP GROWTH")
+```
+Bellow we plot the distribution of RGDP Growth. We can see that our data do not follow the normal distribution. (Tests will prove below).
+```{r}
+hist(y, main="histogram of RGDP GROWTH")
+```
+The QQ plot for the normal distribution below shows us that our data are not normal for the tail values. The tails are fatter and the data probably follow a t distribution.
+```{r}
+qqnorm(y,main="Normal QQplot of y") # normal Q-Q plot
+qqline(y)
+```
+We will also run normality tests that will show us that the null hypothesis (normality) is rejected.
+```{r}
+jarque.bera.test(y)
+shapiro.test(y) 
+```
+We can run agai both ACF and PACF plots to get the same results we discussed before.
+```{r}
+par(mfrow=c(1,2))
+acf(y, 48, main="ACF of RGDP GROWTH")   
+pacf(y, 48, main="PACF of RGDP GROWTH") 
+```
+```{r}
+Box.test(y,lag=12,type="Ljung") 
+```
+To create a regression model we want to see the correlation between each xi attributes of our data. Bellow we can see a plot that shows the pairwise relationship of the attributes of our data.
+```{r}
+# Correlation coefficients
+cor(cbind(y,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16))
+# Correlation coefficients and p-values
+rcorr(as.matrix(cbind(y,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16))) 
+# Scatterplot of all variables
+pairs(cbind(y,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16)) 
+```
+Bellow we will fit a regression model to the y values of our data (dependent), using all the xi attributes of our data (independent).
+```{r}
+fitall <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9 + x10 + x11 + x12 + x13 + x14 + x15 + x16)
+summary(fitall)
+AIC(fitall)
+BIC(fitall)
+```
+The summary shows us that there are some significant values for estimating y. Our R^2 is 0.645, AIC is 248 and BIC is 292. We will test bellow if the residuals of this model are uncorrelated, homoscedastic and normal.
+```{r}
+par(mfrow=c(2,2))
+# Diagnostic tests for the residuals
+# Autocorrelation of the residuals
+acf(fitall$residuals, 36)
+pacf(fitall$residuals, 36)
+# Autocorrelation of the squared residuals
+acf(fitall$residuals^2, 36)
+pacf(fitall$residuals^2, 36)
+```
+We can see that our residuals are both uncorrelated and homoscedastic as ACF and PACF aplots stay between the limits, for the residuals and squared residuals.
+```{r}
+qqnorm(fitall$residuals) 
+qqline(fitall$residuals)
+```
+We can see that for a few tail quantiles the distribution is not normal, but for most it is so we will accept normality for now.
+```{r}
+jarque.bera.test(fitall$residuals)
+shapiro.test(fitall$residuals) 
+```
+Now we will begin repetitive task to improve our model. We will be fitting the regression model, removing the non statistically significant xi that has the highest p-value each time. We will plot the residuals' and squared residuals' ACF, PACF and normal QQ line plot to check if our assumptions are correct. We will repeat this modeling until AIC or BIC stop improving, all the coefficients are significant of there is a problem with the assumptions on the residuals that can be fixed with time series modeling. 
+```{r}
+# Removing x7
+fitall2 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x8 + x9 + x10 + x11 + x12 + x13 + x14 + x15 + x16)
+summary(fitall2)
+AIC(fitall2)
+BIC(fitall2)
+```
+```{r}
+par(mfrow=c(2,3))
+# Diagnostic tests for the residuals
+# Autocorrelation of the residuals
+acf(fitall2$residuals, 36)
+pacf(fitall2$residuals, 36)
+# Autocorrelation of the squared residuals
+acf(fitall2$residuals^2, 36)
+pacf(fitall2$residuals^2, 36)
+qqnorm(fitall2$residuals) 
+qqline(fitall2$residuals)
+```
+
+
+```{r}
+# Removing x12
+fitall3 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x8 + x9 + x10 + x11 + x13 + x14 + x15 + x16)
+summary(fitall3)
+AIC(fitall3)
+BIC(fitall3)
+```
+```{r}
+par(mfrow=c(2,3))
+# Diagnostic tests for the residuals
+# Autocorrelation of the residuals
+acf(fitall3$residuals, 36)
+pacf(fitall3$residuals, 36)
+# Autocorrelation of the squared residuals
+acf(fitall3$residuals^2, 36)
+pacf(fitall3$residuals^2, 36)
+qqnorm(fitall3$residuals) 
+qqline(fitall3$residuals)
+```
+
+```{r}
+# Removing x10
+fitall4 <- lm(y ~ x1 + x2 + x3 + x4 + x5 + x6 + x8 + x9 + x11 + x13 + x14 + x15 + x16)
+summary(fitall4)
+AIC(fitall4)
+BIC(fitall4)
+```
+```{r}
+par(mfrow=c(2,3))
+# Diagnostic tests for the residuals
+# Autocorrelation of the residuals
+acf(fitall4$residuals, 36)
+pacf(fitall4$residuals, 36)
+# Autocorrelation of the squared residuals
+acf(fitall4$residuals^2, 36)
+pacf(fitall4$residuals^2, 36)
+qqnorm(fitall4$residuals) 
+qqline(fitall4$residuals)
+```
+
+```{r}
+# Removing x2
+fitall5 <- lm(y ~ x1 + x3 + x4 + x5 + x6 + x8 + x9 + x11 + x13 + x14 + x15 + x16)
+summary(fitall5)
+AIC(fitall5)
+BIC(fitall5)
+```
+```{r}
+par(mfrow=c(2,3))
+# Diagnostic tests for the residuals
+# Autocorrelation of the residuals
+acf(fitall5$residuals, 36)
+pacf(fitall5$residuals, 36)
+# Autocorrelation of the squared residuals
+acf(fitall5$residuals^2, 36)
+pacf(fitall5$residuals^2, 36)
+qqnorm(fitall5$residuals) 
+qqline(fitall5$residuals)
+```
+
+```{r}
+# Removing x13
+fitall6 <- lm(y ~ x1 + x3 + x4 + x5 + x6 + x8 + x9 + x11 + x14 + x15 + x16)
+summary(fitall6)
+AIC(fitall6)
+BIC(fitall6)
+```
+```{r}
+par(mfrow=c(2,3))
+# Diagnostic tests for the residuals
+# Autocorrelation of the residuals
+acf(fitall6$residuals, 36)
+pacf(fitall6$residuals, 36)
+# Autocorrelation of the squared residuals
+acf(fitall6$residuals^2, 36)
+pacf(fitall6$residuals^2, 36)
+qqnorm(fitall6$residuals) 
+qqline(fitall6$residuals)
+```
+
+```{r}
+# Removing x15
+fitall7 <- lm(y ~ x1 + x3 + x4 + x5 + x6 + x8 + x9 + x11 + x14 + x16)
+summary(fitall7)
+AIC(fitall7)
+BIC(fitall7)
+```
+```{r}
+par(mfrow=c(2,3))
+# Diagnostic tests for the residuals
+# Autocorrelation of the residuals
+acf(fitall7$residuals, 36)
+pacf(fitall7$residuals, 36)
+# Autocorrelation of the squared residuals
+acf(fitall7$residuals^2, 36)
+pacf(fitall7$residuals^2, 36)
+qqnorm(fitall7$residuals) 
+qqline(fitall7$residuals)
+```
+
+```{r}
+# Removing x11
+fitall8 <- lm(y ~ x1 + x3 + x4 + x5 + x6 + x8 + x9 + x14 + x16)
+summary(fitall8)
+AIC(fitall8)
+BIC(fitall8)
+```
+```{r}
+par(mfrow=c(2,3))
+# Diagnostic tests for the residuals
+# Autocorrelation of the residuals
+acf(fitall8$residuals, 36)
+pacf(fitall8$residuals, 36)
+# Autocorrelation of the squared residuals
+acf(fitall8$residuals^2, 36)
+pacf(fitall8$residuals^2, 36)
+qqnorm(fitall8$residuals) 
+qqline(fitall8$residuals)
+```
+
+```{r}
+# Removing x3
+fitall9 <- lm(y ~ x1 + x4 + x5 + x6 + x8 + x9 + x14 + x16)
+summary(fitall9)
+AIC(fitall9)
+BIC(fitall9)
+```
+```{r}
+par(mfrow=c(2,3))
+# Diagnostic tests for the residuals
+# Autocorrelation of the residuals
+acf(fitall9$residuals, 36)
+pacf(fitall9$residuals, 36)
+# Autocorrelation of the squared residuals
+acf(fitall9$residuals^2, 36)
+pacf(fitall9$residuals^2, 36)
+qqnorm(fitall9$residuals) 
+qqline(fitall9$residuals)
+```
+```{r}
+# Removing x14
+fitall10 <- lm(y ~ x1 + x4 + x5 + x6 + x8 + x9 + x16)
+summary(fitall10)
+AIC(fitall10)
+BIC(fitall10)
+```
+```{r}
+par(mfrow=c(2,3))
+# Diagnostic tests for the residuals
+# Autocorrelation of the residuals
+acf(fitall10$residuals, 36)
+pacf(fitall10$residuals, 36)
+# Autocorrelation of the squared residuals
+acf(fitall10$residuals^2, 36)
+pacf(fitall10$residuals^2, 36)
+qqnorm(fitall10$residuals) 
+qqline(fitall10$residuals)
+```
+```{r}
+# Removing x9
+fitall11 <- lm(y ~ x1 + x4 + x5 + x6 + x8 + x16)
+summary(fitall11)
+AIC(fitall11)
+BIC(fitall11)
+```
+```{r}
+par(mfrow=c(2,3))
+# Diagnostic tests for the residuals
+# Autocorrelation of the residuals
+acf(fitall11$residuals, 36)
+pacf(fitall11$residuals, 36)
+# Autocorrelation of the squared residuals
+acf(fitall11$residuals^2, 36)
+pacf(fitall11$residuals^2, 36)
+qqnorm(fitall11$residuals) 
+qqline(fitall11$residuals)
+```
+```{r}
+# Removing x6
+fitall12 <- lm(y ~ x1 + x4 + x5 + x8 + x16)
+summary(fitall12)
+AIC(fitall12)
+BIC(fitall12)
+
+```
+```{r}
+par(mfrow=c(2,3))
+# Diagnostic tests for the residuals
+# Autocorrelation of the residuals
+acf(fitall12$residuals, 36)
+pacf(fitall12$residuals, 36)
+# Autocorrelation of the squared residuals
+acf(fitall12$residuals^2, 36)
+pacf(fitall12$residuals^2, 36)
+qqnorm(fitall12$residuals) 
+qqline(fitall12$residuals)
+```
+Now all the coefficients are significant, The residuals are uncorrelated (ACF, PACF plots of residuals), Homoscedastic (ACF, PACF plots of squared residuals) and close to normal (a few quantiles not on normal lines)
+```{r}
+Box.test(fitall12$residuals,lag=12,type="Ljung") 
+Box.test(fitall12$residuals^2,lag=12,type="Ljung")
+jarque.bera.test(fitall12$residuals)
+shapiro.test(fitall12$residuals) 
+```
+Our final model is y = 0.247131 - 0.337922*x1 + 0.241633*x4 + 0.014283 *x5 + 
+0.678528*x8 + 0.327998*x16. It translates to RGDPGrowth = 0.247131 -0.337922*(LAG1 NED) + 0.241633*(LAG4 NED) + 0.014283 *(OIL WTI) + 0.678528*(RPROD NED) + 0.327998*(LEADNED) with R-squared:  0.5676, AIC: 237, BIC: 254.
